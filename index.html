@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Locations</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+        .container {
+            flex: 1;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background: white;
+            overflow-y: auto;
+        }
+        .sidebar {
+            width: 300px;
+            background: #333;
+            color: white;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .device {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-bottom: 1px solid #ccc;
+        }
+        .device:last-child {
+            border-bottom: none;
+        }
+        .device h2 {
+            margin: 0;
+            margin-bottom: 5px;
+        }
+        .location p {
+            margin: 5px 0;
+        }
+        .log {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-bottom: 1px solid #555;
+        }
+        .log:last-child {
+            border-bottom: none;
+        }
+        .log p {
+            margin: 5px 0;
+        }
+        .status {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .controls {
+            margin-top: 10px;
+        }
+        .controls button {
+            margin-right: 5px;
+        }
+        .notifications {
+            margin-top: 20px;
+        }
+        .notification {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+        }
+        #map {
+            height: 400px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Logs de Localização</h2>
+        <div id="logs"></div>
+    </div>
+    <div class="container">
+        <h1>Device Locations</h1>
+        <div id="status" class="status">Status: Aguardando...</div>
+        <div id="devices"></div>
+        <div class="controls">
+            <button onclick="playSound()">Emitir Som</button>
+            <button onclick="lostDevice()">Modo Perdido</button>
+            <button onclick="eraseDevice()">Apagar Dispositivo</button>
+        </div>
+        <div id="map"></div>
+        <div class="notifications">
+            <h2>Notificações do iCloud</h2>
+            <button onclick="fetchNotifications()">Carregar Notificações</button>
+            <div id="notifications"></div>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.min.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const socket = io();
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('message', (data) => {
+            console.log(data);
+        });
+
+        socket.on('status', (data) => {
+            const statusContainer = document.getElementById('status');
+            statusContainer.textContent = `Status: ${data.message}`;
+        });
+
+        socket.on('update_devices', (device) => {
+            const devicesContainer = document.getElementById('devices');
+            let deviceElement = document.getElementById(device.name);
+            if (!deviceElement) {
+                deviceElement = document.createElement('div');
+                deviceElement.className = 'device';
+                deviceElement.id = device.name;
+                devicesContainer.appendChild(deviceElement);
+            }
+
+            const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${device.location.latitude},${device.location.longitude}`;
+
+            deviceElement.innerHTML = `
+                <h2>${device.name} (${device.type})</h2>
+                <div class="location">
+                    <p>Latitude: ${device.location.latitude}</p>
+                    <p>Longitude: ${device.location.longitude}</p>
+                    <p>Endereço: ${device.location.address}</p>
+                    <p>Horário: ${device.location.timestamp}</p>
+                    <p><a href="${googleMapsLink}" target="_blank">Ver no Google Maps</a></p>
+                </div>
+            `;
+
+            updateMap(device.location.latitude, device.location.longitude);
+        });
+
+        socket.on('log', (device) => {
+            const logsContainer = document.getElementById('logs');
+            const logElement = document.createElement('div');
+            logElement.className = 'log';
+
+            const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${device.location.latitude},${device.location.longitude}`;
+
+            logElement.innerHTML = `
+                <p><strong>${device.name}</strong> (${device.type})</p>
+                <p>Latitude: ${device.location.latitude}</p>
+                <p>Longitude: ${device.location.longitude}</p>
+                <p>Endereço: ${device.location.address}</p>
+                <p>Horário: ${device.location.timestamp}</p>
+                <p><a href="${googleMapsLink}" target="_blank">Ver no Google Maps</a></p>
+            `;
+            logsContainer.prepend(logElement);
+        });
+
+        socket.on('error', (data) => {
+            console.error(data.error);
+        });
+
+        let map = L.map('map').setView([-23.5505, -46.6333], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        function updateMap(latitude, longitude) {
+            L.marker([latitude, longitude]).addTo(map)
+                .bindPopup('Dispositivo localizado aqui.')
+                .openPopup();
+            map.setView([latitude, longitude], 13);
+        }
+
+        function playSound() {
+            fetch('/play_sound/device_id')  // Substitua device_id pelo ID real do dispositivo
+                .then(response => response.json())
+                .then(data => alert(data.message))
+                .catch(error => console.error('Erro ao emitir som:', error));
+        }
+
+        function lostDevice() {
+            const message = prompt("Digite a mensagem para o modo perdido:");
+            const phoneNumber = prompt("Digite o número de telefone:");
+            const passcode = prompt("Digite o código de acesso:");
+            fetch('/lost_device/device_id', {  // Substitua device_id pelo ID real do dispositivo
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: message,
+                    phone_number: phoneNumber,
+                    passcode: passcode,
+                }),
+            })
+            .then(response => response.json())
+            .then(data => alert(data.message))
+            .catch(error => console.error('Erro ao colocar em modo perdido:', error));
+        }
+
+        function eraseDevice() {
+            fetch('/erase_device/device_id')  // Substitua device_id pelo ID real do dispositivo
+                .then(response => response.json())
+                .then(data => alert(data.message))
+                .catch(error => console.error('Erro ao apagar dispositivo:', error));
+        }
+
+        function fetchNotifications() {
+            fetch('/notifications')
+                .then(response => response.json())
+                .then(data => {
+                    const notificationsContainer = document.getElementById('notifications');
+                    notificationsContainer.innerHTML = '';
+                    if (data.notifications && data.notifications.length > 0) {
+                        data.notifications.forEach(notification => {
+                            const notificationElement = document.createElement('div');
+                            notificationElement.className = 'notification';
+                            notificationElement.innerHTML = `
+                                <p><strong>${notification.title}</strong></p>
+                                <p>${notification.message}</p>
+                                <p>${notification.date}</p>
+                            `;
+                            notificationsContainer.appendChild(notificationElement);
+                        });
+                    } else {
+                        notificationsContainer.innerHTML = '<p>Sem notificações disponíveis.</p>';
+                    }
+                })
+                .catch(error => console.error('Erro ao buscar notificações:', error));
+        }
+    </script>
+</body>
+</html>
