@@ -7,5 +7,5 @@ Este projeto permite rastrear dispositivos iCloud e exibir suas localizações e
 1. Clone o repositório:
 
    ```bash
-   git clone https://github.com/seu_usuario/seu_repositorio.git
-   cd seu_repositorio
+   git clone https://github.com/leonardoborchartt/apple-find
+   cd apple-find
