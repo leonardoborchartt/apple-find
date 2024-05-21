@@ -3,7 +3,7 @@ import time
 import requests
 import threading
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, url_for
 from flask_socketio import SocketIO, emit
 from pyicloud import PyiCloudService
 from http.cookiejar import LWPCookieJar
@@ -40,42 +40,31 @@ def authenticate():
     else:
         api.authenticate()
         if api.requires_2fa:
-            print("A autenticação de dois fatores é necessária.")
-            code = input("Insira o código enviado para o seu dispositivo: ")
-            result = api.validate_2fa_code(code)
-            if result:
-                print("Código de autenticação de dois fatores validado com sucesso.")
-            else:
-                print("Falha na validação do código de autenticação de dois fatores.")
+            return api
     
     api.session.cookies.save(ignore_discard=True, ignore_expires=True)
     
     return api
 
-def get_address_from_coords(latitude, longitude):
-    url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={latitude}&lon={longitude}&zoom=18&addressdetails=1"
-    response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-    if response.status_code == 200:
-        data = response.json()
-        if 'address' in data:
-            return data['display_name']
-        else:
-            return "Endereço não encontrado"
-    else:
-        return "Erro ao buscar o endereço"
-
-def log_location(device_info):
-    with open(log_file, 'a') as f:
-        log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {device_info['name']} ({device_info['type']}): "
-        log_entry += f"Latitude: {device_info['location']['latitude']}, Longitude: {device_info['location']['longitude']}, "
-        log_entry += f"Endereço: {device_info['location']['address']}, Horário: {device_info['location']['timestamp']}\n"
-        f.write(log_entry)
-
 api = authenticate()
 
 @app.route('/')
 def index():
+    if api.requires_2fa:
+        return redirect(url_for('two_factor_auth'))
     return render_template('index.html')
+
+@app.route('/two_factor_auth', methods=['GET', 'POST'])
+def two_factor_auth():
+    if request.method == 'POST':
+        code = request.form.get('code')
+        if api.validate_2fa_code(code):
+            api.trust_session()
+            api.session.cookies.save(ignore_discard=True, ignore_expires=True)
+            return redirect(url_for('index'))
+        else:
+            return render_template('two_factor_auth.html', error="Invalid code")
+    return render_template('two_factor_auth.html')
 
 last_locations = {}
 
@@ -121,6 +110,25 @@ def fetch_device_data():
             socketio.emit('status', {'message': f'Erro ao buscar dispositivos: {str(e)}'})
             socketio.emit('error', {'error': str(e)})
         time.sleep(60)  # Espera 60 segundos antes de buscar novamente
+
+def get_address_from_coords(latitude, longitude):
+    url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={latitude}&lon={longitude}&zoom=18&addressdetails=1"
+    response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+    if response.status_code == 200:
+        data = response.json()
+        if 'address' in data:
+            return data['display_name']
+        else:
+            return "Endereço não encontrado"
+    else:
+        return "Erro ao buscar o endereço"
+
+def log_location(device_info):
+    with open(log_file, 'a') as f:
+        log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {device_info['name']} ({device_info['type']}): "
+        log_entry += f"Latitude: {device_info['location']['latitude']}, Longitude: {device_info['location']['longitude']}, "
+        log_entry += f"Endereço: {device_info['location']['address']}, Horário: {device_info['location']['timestamp']}\n"
+        f.write(log_entry)
 
 @app.route('/notifications')
 def notifications():
