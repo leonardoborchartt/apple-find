@@ -18,7 +18,7 @@ password = os.getenv('PASSWORD')
 
 # Nome do arquivo onde o token de sessão será armazenado
 session_file = 'icloud_session.pkl'
-log_file = 'device_locations.log'  # Arquivo de log
+log_file = '/tmp/device_locations.log'  # Arquivo de log no diretório temporário
 
 # Inicializa o Flask e Flask-SocketIO
 app = Flask(__name__, template_folder='templates')
@@ -124,11 +124,14 @@ def get_address_from_coords(latitude, longitude):
         return "Erro ao buscar o endereço"
 
 def log_location(device_info):
-    with open(log_file, 'a') as f:
-        log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {device_info['name']} ({device_info['type']}): "
-        log_entry += f"Latitude: {device_info['location']['latitude']}, Longitude: {device_info['location']['longitude']}, "
-        log_entry += f"Endereço: {device_info['location']['address']}, Horário: {device_info['location']['timestamp']}\n"
-        f.write(log_entry)
+    try:
+        with open(log_file, 'a') as f:
+            log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {device_info['name']} ({device_info['type']}): "
+            log_entry += f"Latitude: {device_info['location']['latitude']}, Longitude: {device_info['location']['longitude']}, "
+            log_entry += f"Endereço: {device_info['location']['address']}, Horário: {device_info['location']['timestamp']}\n"
+            f.write(log_entry)
+    except IOError as e:
+        print(f"Erro ao escrever no log {log_file}: {e}")
 
 @app.route('/notifications')
 def notifications():
