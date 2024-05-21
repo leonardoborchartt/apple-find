@@ -166,11 +166,6 @@ def lost_device(device_id):
     try:
         data = request.json
         message = data.get('message', 'This device has been lost.')
-        phone_number = data.get('phone_number',Desculpe pelo corte anterior. Vou concluir a atualização do `app.py` e revisar o restante das configurações.
-
-### Continuação e Finalização do `app.py`:
-
-```python
         phone_number = data.get('phone_number', '')
         passcode = data.get('passcode', '1234')
         device = next(device for device in api.devices if device['id'] == device_id)
