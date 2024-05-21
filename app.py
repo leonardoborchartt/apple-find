@@ -18,7 +18,6 @@ password = os.getenv('PASSWORD')
 
 # Nome do arquivo onde o token de sessão será armazenado
 session_file = 'icloud_session.pkl'
-log_file = '/tmp/device_locations.log'  # Arquivo de log no diretório temporário
 
 # Inicializa o Flask e Flask-SocketIO
 app = Flask(__name__, template_folder='templates')
@@ -104,7 +103,6 @@ def fetch_device_data():
                         devices_info.append(device_info)
                         socketio.emit('update_devices', device_info)
                         socketio.emit('log', device_info)
-                        log_location(device_info)  # Log a localização no arquivo
             socketio.emit('status', {'message': 'Busca de dispositivos concluída.'})
         except Exception as e:
             socketio.emit('status', {'message': f'Erro ao buscar dispositivos: {str(e)}'})
@@ -123,21 +121,10 @@ def get_address_from_coords(latitude, longitude):
     else:
         return "Erro ao buscar o endereço"
 
-def log_location(device_info):
-    try:
-        with open(log_file, 'a') as f:
-            log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {device_info['name']} ({device_info['type']}): "
-            log_entry += f"Latitude: {device_info['location']['latitude']}, Longitude: {device_info['location']['longitude']}, "
-            log_entry += f"Endereço: {device_info['location']['address']}, Horário: {device_info['location']['timestamp']}\n"
-            f.write(log_entry)
-    except IOError as e:
-        print(f"Erro ao escrever no log {log_file}: {e}")
-
 @app.route('/notifications')
 def notifications():
     try:
         notifications = api.push.all()
-        print("Notificações:", notifications)  # Adicione esta linha para depuração
         notifications_info = [
             {
                 'title': notification.get('title', 'Sem título'),
